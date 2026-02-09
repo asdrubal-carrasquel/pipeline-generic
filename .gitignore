@@ -70,3 +70,12 @@ nunit-*.xml
 **/playwright-report/
 **/blob-report/
 **/playwright/.cache/
+
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/venv/
+**/*.egg-info/
+**/.coverage
+**/htmlcov/

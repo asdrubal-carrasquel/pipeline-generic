@@ -11,8 +11,10 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths: ['fronttest/**', '.github/workflows/ci.yml']
   pull_request:
     branches: [main, develop]
+    paths: ['fronttest/**', '.github/workflows/ci.yml']
 
 # Permisos mínimos (principio de least privilege)
 permissions:
