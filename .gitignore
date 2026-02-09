@@ -52,3 +52,21 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Node / Vue / Vite (cualquier proyecto: fronttest, etc.)
+**/node_modules/
+**/dist/
+**/coverage/
+**/tsconfig.*.tsbuildinfo
+**/vite.config.d.ts
+**/vite.config.js
+*.local
+.env
+.env.*
+!.env.example
+
+# Playwright
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/playwright/.cache/

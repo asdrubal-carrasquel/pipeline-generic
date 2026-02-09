@@ -1,0 +1,115 @@
+# =============================================================================
+# CD Pipeline — Build & Deploy (SRE / DevOps)
+# =============================================================================
+# Se ejecuta solo cuando el workflow "CI" termina con éxito en la rama main.
+# Build del artefacto, versionado por SHA, y deploy (placeholder) con secrets
+# y environment protection (ej. production con approvals).
+# =============================================================================
+
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Permisos: solo los necesarios para deploy (ajustar según destino)
+permissions:
+  contents: read
+  deployments: write
+  # Añadir actions: read si se usan acciones que requieran token
+
+env:
+  NODE_VERSION: ${{ vars.NODE_VERSION || '20' }}
+  DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT || 'production' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 6. Build & Artifact
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build & Artifact
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    defaults:
+      run:
+        working-directory: fronttest
+    steps:
+      - name: Checkout at CI commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: 'npm'
+          cache-dependency-path: fronttest/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fronttest-${{ github.event.workflow_run.head_sha }}
+          path: fronttest/dist/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 7. Deploy (placeholder — configurar según entorno objetivo)
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event.workflow_run.conclusion == 'success'
+    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'production' }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fronttest-${{ github.event.workflow_run.head_sha }}
+
+      # -----------------------------------------------------------------------
+      # Placeholder: descomentar y configurar según destino de deploy.
+      # Usar siempre secrets (nunca valores en claro).
+      # -----------------------------------------------------------------------
+
+      # Ejemplo: GitHub Pages
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@v3
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: .
+
+      # Ejemplo: AWS S3
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ vars.AWS_REGION }}
+      # - name: Sync to S3
+      #   run: aws s3 sync . s3://${{ vars.S3_BUCKET }} --delete
+
+      # Ejemplo: servidor vía SSH
+      # - name: Deploy via SSH
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_KEY }}
+      #     source: '*'
+      #     target: '/var/www/app'
+
+      - name: Deploy placeholder
+        run: |
+          echo "Deploy target not configured. Artifact built and stored."
+          echo "Configure the deploy steps above (GitHub Pages, S3, SSH, etc.) and use GitHub Secrets."
+          echo "Use GitHub Environments (e.g. production) with required reviewers for safe deploys."
