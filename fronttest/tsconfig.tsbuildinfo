@@ -1,0 +1,1 @@
+{"root":["./src/app.spec.ts","./src/main.ts","./src/vite-env.d.ts","./src/components/counter.spec.ts","./src/components/welcome.spec.ts","./src/app.vue","./src/components/counter.vue","./src/components/welcome.vue"],"version":"5.6.3"}

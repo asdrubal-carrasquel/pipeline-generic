@@ -1,0 +1,192 @@
+# =============================================================================
+# CI Pipeline — Vue.js (SRE / DevOps)
+# =============================================================================
+# Pipeline de integración continua: checkout, lint, unit tests con cobertura,
+# tests de integración/e2e y quality gate. Pensado para producción.
+# Dispara en push y pull_request a main, develop y ramas feature.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Permisos mínimos (principio de least privilege)
+permissions:
+  contents: read
+  pull-requests: read
+
+# Variables configurables: se pueden sobreescribir en GitHub Settings → Variables
+env:
+  NODE_VERSION: ${{ vars.NODE_VERSION || '20' }}
+  COVERAGE_MIN_PERCENT: ${{ vars.COVERAGE_MIN_PERCENT || '80' }}
+  # API base URL para tests de integración (mock o staging)
+  API_URL_CI: ${{ vars.API_URL_CI || 'http://localhost:3000' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Checkout & Setup
+  # ---------------------------------------------------------------------------
+  setup:
+    name: Checkout & Setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fronttest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: 'npm'
+          cache-dependency-path: fronttest/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+  # ---------------------------------------------------------------------------
+  # 2. Linter / Static Analysis (en paralelo con unit-tests)
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: setup
+    defaults:
+      run:
+        working-directory: fronttest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: 'npm'
+          cache-dependency-path: fronttest/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fallar si hay errores o warnings (max-warnings 0 recomendado en script lint)
+      - name: Run ESLint
+        run: npm run lint
+
+  # ---------------------------------------------------------------------------
+  # 3. Unit Tests + Cobertura (en paralelo con lint)
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    defaults:
+      run:
+        working-directory: fronttest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: 'npm'
+          cache-dependency-path: fronttest/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage
+        env:
+          NODE_ENV: test
+
+      # Validar umbral mínimo de cobertura (configurable por COVERAGE_MIN_PERCENT)
+      - name: Check coverage threshold
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const fs = require('fs');
+              const j = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+              const total = j.total || {};
+              const pct = (total.lines && total.lines.pct) != null ? total.lines.pct : (total.statements && total.statements.pct) != null ? total.statements.pct : 0;
+              const min = Number(process.env.COVERAGE_MIN_PERCENT) || 80;
+              if (pct < min) {
+                console.error('Coverage ' + pct + '% is below minimum ' + min + '%');
+                process.exit(1);
+              }
+              console.log('Coverage ' + pct + '% meets minimum ' + min + '%');
+            "
+          else
+            echo "No coverage-summary.json found; ensure Vitest is configured with coverage.reporter json-summary and coverage.reportsDirectory coverage"
+            exit 1
+          fi
+        env:
+          COVERAGE_MIN_PERCENT: ${{ vars.COVERAGE_MIN_PERCENT || '80' }}
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-${{ github.run_id }}
+          path: fronttest/coverage/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 4. Functional / Integration Tests
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    name: Integration / E2E Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    defaults:
+      run:
+        working-directory: fronttest
+    env:
+      NODE_ENV: test
+      VITE_API_URL: ${{ vars.API_URL_CI || 'http://localhost:3000' }}
+      # Añadir aquí otras variables de entorno que necesiten los tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: 'npm'
+          cache-dependency-path: fronttest/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Opcional: levantar servicios (ej. Postgres, Redis) con 'services:' en el job
+      # o un step que arranque un mock (json-server, etc.)
+
+      - name: Run integration / E2E tests
+        run: npm run test:e2e
+        env:
+          NODE_ENV: test
+          VITE_API_URL: ${{ vars.API_URL_CI || 'http://localhost:3000' }}
+
+  # ---------------------------------------------------------------------------
+  # 5. Quality Gate
+  # ---------------------------------------------------------------------------
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests]
+    steps:
+      - name: Quality gate passed
+        run: |
+          echo "All gates passed: Lint OK, Unit tests OK, Coverage OK, Integration tests OK."
+          echo "CI is green — ready for build/deploy on main."

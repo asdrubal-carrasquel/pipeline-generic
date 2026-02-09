@@ -1,0 +1,26 @@
+:root {
+  --color-heading: #213547;
+  --color-text: #646c6f;
+  --color-accent: #42b883;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--color-text);
+  line-height: 1.6;
+  background: #fff;
+}
+
+#app {
+  min-height: 100vh;
+  padding: 2rem 0;
+}
